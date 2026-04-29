@@ -136,6 +136,16 @@ class KeyboardController(
                     currentLayer = KeyboardLayer.QWERTY
                     viewActions.switchLayer(KeyboardLayer.QWERTY)
                 }
+                ActionType.SWITCH_TO_EMOJI -> {
+                    viewActions.dismissKeyPreview()
+                    currentLayer = KeyboardLayer.EMOJI
+                    viewActions.switchLayer(KeyboardLayer.EMOJI)
+                }
+                ActionType.SWITCH_FROM_EMOJI -> {
+                    viewActions.dismissKeyPreview()
+                    currentLayer = KeyboardLayer.QWERTY
+                    viewActions.switchLayer(KeyboardLayer.QWERTY)
+                }
                 ActionType.SHIFT -> onShiftTapped()
                 ActionType.SPACE -> inputActions.commitText(" ")
                 ActionType.ENTER -> {
@@ -152,6 +162,13 @@ class KeyboardController(
                 ActionType.BACKSPACE -> { /* handled via onBackspaceDown/Up */ }
             }
         }
+    }
+
+    /**
+     * Called when an emoji key is tapped. Commits the full emoji string directly.
+     */
+    fun onEmojiTapped(emoji: String) {
+        inputActions.commitText(emoji)
     }
 
     // -------------------------------------------------------------------------

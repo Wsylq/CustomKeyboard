@@ -7,6 +7,7 @@ import com.example.customkeyboard.model.ActionType.ENTER
 import com.example.customkeyboard.model.ActionType.SHIFT
 import com.example.customkeyboard.model.ActionType.SPACE
 import com.example.customkeyboard.model.ActionType.SWITCH_TO_SYMBOLS
+import com.example.customkeyboard.model.ActionType.SWITCH_TO_EMOJI
 
 object QwertyLayout {
     val rows: List<List<Key>> = listOf(
@@ -27,9 +28,10 @@ object QwertyLayout {
             Letter('b'), Letter('n'), Letter('m'),
             Action(BACKSPACE)
         ),
-        // Row 3 — bottom row: SwitchToSymbols, Space, Enter
+        // Row 3 — bottom row: SwitchToSymbols, Emoji, Space, Enter
         listOf(
             Action(SWITCH_TO_SYMBOLS),
+            Action(SWITCH_TO_EMOJI),
             Action(SPACE),
             Action(ENTER)
         )

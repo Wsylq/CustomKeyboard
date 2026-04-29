@@ -23,7 +23,9 @@ enum class ActionType {
     SPACE,
     ENTER,
     SWITCH_TO_SYMBOLS,
-    SWITCH_TO_QWERTY
+    SWITCH_TO_QWERTY,
+    SWITCH_TO_EMOJI,
+    SWITCH_FROM_EMOJI
 }
 
 /**
@@ -44,8 +46,10 @@ enum class ShiftState {
  *
  * - [QWERTY]  — the standard alphabetic layout.
  * - [SYMBOL]  — the numbers and punctuation layout.
+ * - [EMOJI]   — the emoji picker layout.
  */
 enum class KeyboardLayer {
     QWERTY,
-    SYMBOL
+    SYMBOL,
+    EMOJI
 }
