@@ -1,0 +1,26 @@
+# Built outputs
+/build/
+app/build/
+
+# Gradle wrapper cache and generated files
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# Local SDK path — machine-specific, never commit
+local.properties
+
+# Android Studio / IntelliJ IDEA
+*.iml
+.idea/
+*.iws
+*.ipr
+captures/
+.externalNativeBuild/
+.cxx/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Kotlin incremental compilation cache
+**/.kotlin/
