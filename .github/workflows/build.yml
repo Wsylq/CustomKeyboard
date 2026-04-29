@@ -34,6 +34,9 @@ jobs:
           path: ~/.gradle/caches
           key: ${{ runner.os }}-gradle-deps-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --build-cache
 
