@@ -4,7 +4,6 @@ app/build/
 
 # Gradle wrapper cache and generated files
 .gradle/
-gradle/wrapper/gradle-wrapper.jar
 
 # Local SDK path — machine-specific, never commit
 local.properties
