@@ -1,216 +1,298 @@
 package com.example.customkeyboard.settings
 
+import android.app.Activity
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
 import com.example.customkeyboard.settings.KeyboardHeightManager.Preset
 
 /**
- * Simple settings screen for keyboard height.
+ * Keyboard settings screen — launched from the app icon.
  *
- * Accessible from the Android app launcher (not from inside the IME itself,
- * since IME services cannot start activities directly).
- *
- * Layout (all programmatic — no XML needed):
- *   Title
- *   4 preset buttons (Short / Normal / Tall / Extra Tall)
- *   Fine-tune SeekBar  (±30% around the selected preset)
- *   Live preview label showing current row height in dp
+ * Uses plain [Activity] (no AppCompat dependency) to avoid theme crashes.
+ * All layout is built programmatically.
  */
-class KeyboardSettingsActivity : AppCompatActivity() {
+class KeyboardSettingsActivity : Activity() {
 
-    private val BASE_ROW_DP = 52f   // matches KeyboardView default
+    private val BASE_ROW_DP = 52f
+    private val SCALE_MIN   = 0.70f
+    private val SCALE_MAX   = 1.60f
 
     private lateinit var seekBar: SeekBar
     private lateinit var previewLabel: TextView
+    private lateinit var previewStrip: LinearLayout
     private val presetButtons = mutableListOf<Button>()
-
-    // SeekBar maps 0..100 → scale 0.70..1.60
-    private val SCALE_MIN = 0.70f
-    private val SCALE_MAX = 1.60f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.decorView.setBackgroundColor(Color.WHITE)
 
-        val root = ScrollView(this)
+        val root = ScrollView(this).apply {
+            setBackgroundColor(Color.parseColor("#F2F2F7"))
+        }
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(32), dp(24), dp(32))
+            setPadding(px(20), px(16), px(20), px(40))
         }
         root.addView(container)
         setContentView(root)
 
-        // ── Title ──────────────────────────────────────────────────────────
+        buildToolbar(container)
+        buildSection(container, "Keyboard Height Preset") { buildPresetRow(it) }
+        buildSection(container, "Fine-tune") { buildSeekBar(it) }
+        buildSection(container, "Preview") { buildPreviewArea(it) }
+        buildResetButton(container)
+
+        // Load saved value
+        val scale = KeyboardHeightManager.getScale(this)
+        seekBar.progress = scaleToProgress(scale)
+        updateAll(scale)
+    }
+
+    // ── Toolbar ──────────────────────────────────────────────────────────────
+
+    private fun buildToolbar(container: LinearLayout) {
+        container.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, px(20))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+
+            addView(TextView(this@KeyboardSettingsActivity).apply {
+                text = "⌨"
+                textSize = 28f
+                setPadding(0, 0, px(12), 0)
+            })
+            addView(LinearLayout(this@KeyboardSettingsActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(this@KeyboardSettingsActivity).apply {
+                    text = "Custom Keyboard"
+                    textSize = 20f
+                    setTextColor(Color.parseColor("#1C1C1E"))
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(this@KeyboardSettingsActivity).apply {
+                    text = "Settings"
+                    textSize = 13f
+                    setTextColor(Color.parseColor("#8E8E93"))
+                })
+            })
+        })
+    }
+
+    // ── Section wrapper ───────────────────────────────────────────────────────
+
+    private fun buildSection(
+        container: LinearLayout,
+        title: String,
+        content: (LinearLayout) -> Unit
+    ) {
+        // Section title
         container.addView(TextView(this).apply {
-            text = "Keyboard Height"
-            textSize = 22f
-            setTextColor(0xFF1C1C1E.toInt())
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, dp(8))
+            text = title.uppercase()
+            textSize = 11f
+            setTextColor(Color.parseColor("#8E8E93"))
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(px(4), px(16), 0, px(6))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         })
 
-        container.addView(TextView(this).apply {
-            text = "Choose how tall the keyboard rows appear."
-            textSize = 14f
-            setTextColor(0xFF8E8E93.toInt())
-            setPadding(0, 0, 0, dp(24))
-        })
+        // Card
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+            setPadding(px(16), px(16), px(16), px(16))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            // Rounded card via outline
+            elevation = px(2).toFloat()
+        }
+        content(card)
+        container.addView(card)
+    }
 
-        // ── Preset buttons ─────────────────────────────────────────────────
-        val presetRow = LinearLayout(this).apply {
+    // ── Preset buttons ────────────────────────────────────────────────────────
+
+    private fun buildPresetRow(card: LinearLayout) {
+        val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).also { it.bottomMargin = dp(24) }
+            )
         }
 
         Preset.entries.forEach { preset ->
             val btn = Button(this).apply {
                 text = preset.label
-                textSize = 13f
+                textSize = 12f
                 isAllCaps = false
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.parseColor("#2C2C2E"))
                 layoutParams = LinearLayout.LayoutParams(0,
                     LinearLayout.LayoutParams.WRAP_CONTENT, 1f).also {
-                    it.marginEnd = dp(6)
+                    it.marginEnd = px(6)
                 }
                 setOnClickListener { applyPreset(preset) }
             }
             presetButtons.add(btn)
-            presetRow.addView(btn)
+            row.addView(btn)
         }
-        container.addView(presetRow)
+        card.addView(row)
+    }
 
-        // ── Fine-tune label ────────────────────────────────────────────────
-        container.addView(TextView(this).apply {
-            text = "Fine-tune"
-            textSize = 16f
-            setTextColor(0xFF1C1C1E.toInt())
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, dp(8))
-        })
+    // ── SeekBar ───────────────────────────────────────────────────────────────
 
-        // ── SeekBar ────────────────────────────────────────────────────────
+    private fun buildSeekBar(card: LinearLayout) {
+        previewLabel = TextView(this).apply {
+            textSize = 14f
+            setTextColor(Color.parseColor("#1C1C1E"))
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.bottomMargin = px(12) }
+        }
+        card.addView(previewLabel)
+
         seekBar = SeekBar(this).apply {
             max = 100
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).also { it.bottomMargin = dp(12) }
+            )
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
                     if (fromUser) {
                         val scale = progressToScale(progress)
                         KeyboardHeightManager.setScale(this@KeyboardSettingsActivity, scale)
-                        updatePreviewLabel(scale)
-                        highlightMatchingPreset(scale)
+                        updateAll(scale)
                     }
                 }
                 override fun onStartTrackingTouch(sb: SeekBar) {}
                 override fun onStopTrackingTouch(sb: SeekBar) {}
             })
         }
-        container.addView(seekBar)
+        card.addView(seekBar)
 
-        // ── Preview label ──────────────────────────────────────────────────
-        previewLabel = TextView(this).apply {
-            textSize = 14f
-            setTextColor(0xFF8E8E93.toInt())
-            gravity = Gravity.CENTER_HORIZONTAL
+        // Min/Max labels
+        card.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).also { it.bottomMargin = dp(32) }
-        }
-        container.addView(previewLabel)
-
-        // ── Visual preview strip ───────────────────────────────────────────
-        container.addView(TextView(this).apply {
-            text = "Preview"
-            textSize = 16f
-            setTextColor(0xFF1C1C1E.toInt())
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, dp(8))
+            ).also { it.topMargin = px(4) }
+            addView(TextView(this@KeyboardSettingsActivity).apply {
+                text = "Shorter"
+                textSize = 11f
+                setTextColor(Color.parseColor("#8E8E93"))
+                layoutParams = LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            addView(TextView(this@KeyboardSettingsActivity).apply {
+                text = "Taller"
+                textSize = 11f
+                setTextColor(Color.parseColor("#8E8E93"))
+                gravity = Gravity.END
+                layoutParams = LinearLayout.LayoutParams(0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
         })
+    }
 
-        val previewStrip = buildPreviewStrip()
-        container.addView(previewStrip)
+    // ── Preview area ──────────────────────────────────────────────────────────
 
-        // ── Reset button ───────────────────────────────────────────────────
-        container.addView(View(this).apply {
+    private fun buildPreviewArea(card: LinearLayout) {
+        previewStrip = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.parseColor("#1C1C1E"))
+            setPadding(px(8), px(8), px(8), px(8))
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
-            ).also { it.topMargin = dp(32); it.bottomMargin = dp(16) }
-            setBackgroundColor(0xFFE5E5EA.toInt())
-        })
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        card.addView(previewStrip)
+        refreshPreviewStrip(KeyboardHeightManager.getScale(this))
+    }
 
+    private fun refreshPreviewStrip(scale: Float) {
+        previewStrip.removeAllViews()
+        // keyH is in dp — convert to px for the view height
+        val keyHPx = (BASE_ROW_DP * scale * resources.displayMetrics.density).toInt()
+        listOf("Q", "W", "E", "R", "T", "Y").forEach { letter ->
+            previewStrip.addView(TextView(this).apply {
+                text = letter
+                textSize = 16f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                setBackgroundColor(Color.parseColor("#2C2C2E"))
+                layoutParams = LinearLayout.LayoutParams(0, keyHPx, 1f).also {
+                    it.marginEnd = px(4)
+                }
+            })
+        }
+    }
+
+    // ── Reset button ──────────────────────────────────────────────────────────
+
+    private fun buildResetButton(container: LinearLayout) {
         container.addView(Button(this).apply {
-            text = "Reset to Default"
+            text = "Reset to Default (Normal)"
             isAllCaps = false
-            textSize = 15f
+            textSize = 14f
+            setTextColor(Color.parseColor("#FF3B30"))
+            setBackgroundColor(Color.WHITE)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.topMargin = px(24) }
             setOnClickListener {
                 applyPreset(Preset.NORMAL)
                 Toast.makeText(this@KeyboardSettingsActivity,
                     "Reset to Normal", Toast.LENGTH_SHORT).show()
             }
         })
-
-        // ── Load current value ─────────────────────────────────────────────
-        val currentScale = KeyboardHeightManager.getScale(this)
-        seekBar.progress = scaleToProgress(currentScale)
-        updatePreviewLabel(currentScale)
-        highlightMatchingPreset(currentScale)
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun applyPreset(preset: Preset) {
         KeyboardHeightManager.setPreset(this, preset)
         seekBar.progress = scaleToProgress(preset.scale)
-        updatePreviewLabel(preset.scale)
-        highlightMatchingPreset(preset.scale)
-        Toast.makeText(this, "${preset.label} applied — restart keyboard to see changes",
+        updateAll(preset.scale)
+        Toast.makeText(this, "${preset.label} — switch to a text field to see the change",
             Toast.LENGTH_SHORT).show()
     }
 
-    private fun updatePreviewLabel(scale: Float) {
+    private fun updateAll(scale: Float) {
         val rowDp = (BASE_ROW_DP * scale).toInt()
         previewLabel.text = "Row height: ${rowDp}dp  (${(scale * 100).toInt()}%)"
+        refreshPreviewStrip(scale)
+        highlightPresets(scale)
     }
 
-    private fun highlightMatchingPreset(scale: Float) {
+    private fun highlightPresets(scale: Float) {
         Preset.entries.forEachIndexed { i, preset ->
-            val isMatch = kotlin.math.abs(preset.scale - scale) < 0.01f
-            presetButtons.getOrNull(i)?.alpha = if (isMatch) 1.0f else 0.5f
+            val active = kotlin.math.abs(preset.scale - scale) < 0.01f
+            presetButtons.getOrNull(i)?.apply {
+                setBackgroundColor(
+                    if (active) Color.parseColor("#007AFF")
+                    else Color.parseColor("#2C2C2E")
+                )
+            }
         }
-    }
-
-    /** Builds a simple visual strip showing approximate key height. */
-    private fun buildPreviewStrip(): View {
-        val strip = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xFF1C1C1E.toInt())
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-        val scale = KeyboardHeightManager.getScale(this)
-        val keyH = (BASE_ROW_DP * scale).toInt()
-        listOf("Q", "W", "E", "R", "T", "Y").forEach { letter ->
-            strip.addView(TextView(this).apply {
-                text = letter
-                textSize = 16f
-                setTextColor(0xFFFFFFFF.toInt())
-                gravity = Gravity.CENTER
-                setBackgroundColor(0xFF2C2C2E.toInt())
-                layoutParams = LinearLayout.LayoutParams(0, dp(keyH), 1f).also {
-                    it.marginEnd = dp(4)
-                }
-            })
-        }
-        return strip
     }
 
     private fun progressToScale(progress: Int): Float =
@@ -219,6 +301,6 @@ class KeyboardSettingsActivity : AppCompatActivity() {
     private fun scaleToProgress(scale: Float): Int =
         ((scale - SCALE_MIN) / (SCALE_MAX - SCALE_MIN) * 100).toInt().coerceIn(0, 100)
 
-    private fun dp(dp: Int): Int =
+    private fun px(dp: Int): Int =
         (dp * resources.displayMetrics.density).toInt()
 }
