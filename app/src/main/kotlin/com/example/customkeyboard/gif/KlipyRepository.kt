@@ -1,10 +1,13 @@
 package com.example.customkeyboard.gif
 
 import android.util.Log
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
+import java.net.Inet4Address
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
 /**
@@ -23,11 +26,20 @@ import java.util.concurrent.TimeUnit
 object KlipyRepository {
 
     // NOTE: Regenerate this key in your Klipy dashboard — it was exposed in chat.
-    private const val API_KEY = "pf0JUkR9VyZKZxzqG30QgxRawhUxVL6PetvCdHrW7A5bXSN2New8NMyB5Il7vqqip"
+    private const val API_KEY = "pf0JUkR9VyZKZxzqG30QgxRawhUxVL6PetvCdHrW7A5bXSN2New8NMyB5Il7vqqi"
     private const val BASE    = "https://api.klipy.com/api/v1/$API_KEY/gifs"
     private const val PER_PAGE = 24
 
+    /** Prefer IPv4 addresses to avoid IPv6 connectivity failures on some devices/networks. */
+    private val ipv4Dns = Dns { hostname ->
+        val addresses = Dns.SYSTEM.lookup(hostname)
+        // Put IPv4 addresses first; fall back to IPv6 if no IPv4 available
+        val ipv4 = addresses.filterIsInstance<Inet4Address>()
+        if (ipv4.isNotEmpty()) ipv4 else addresses
+    }
+
     private val client = OkHttpClient.Builder()
+        .dns(ipv4Dns)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
@@ -63,6 +75,7 @@ object KlipyRepository {
 
     private fun fetch(url: String): GifPage {
         return try {
+            Log.d("KlipyRepo", "Fetching: $url")
             val request = Request.Builder().url(url).build()
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
