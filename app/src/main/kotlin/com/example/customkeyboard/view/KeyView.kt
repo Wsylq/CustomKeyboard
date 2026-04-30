@@ -27,6 +27,12 @@ class KeyView @JvmOverloads constructor(
 
     var controller: KeyboardController? = null
 
+    /**
+     * When non-null, letter and backspace taps are routed here instead of the controller.
+     * Used by KeyboardView to feed typing into the GIF search bar.
+     */
+    var gifSearchInterceptor: ((Key) -> Boolean)? = null
+
     var shiftState: ShiftState = ShiftState.OFF
         set(value) { field = value; invalidate() }
 
@@ -239,15 +245,28 @@ class KeyView @JvmOverloads constructor(
                 setPressed(true)
                 when {
                     k is Key.CategoryIcon -> onCategoryTap?.invoke(k.category)
-                    k is Key.Action && k.type == ActionType.BACKSPACE -> controller?.onBackspaceDown()
-                    k is Key.Action && k.type == ActionType.SHIFT     -> controller?.onShiftTapped()
-                    else -> controller?.onKeyTapped(k)
+                    k is Key.Action && k.type == ActionType.BACKSPACE -> {
+                        // Route backspace to GIF search if interceptor is active
+                        if (gifSearchInterceptor?.invoke(k) != true) {
+                            controller?.onBackspaceDown()
+                        }
+                    }
+                    k is Key.Action && k.type == ActionType.SHIFT -> controller?.onShiftTapped()
+                    else -> {
+                        // Route letter/symbol to GIF search if interceptor is active
+                        if (gifSearchInterceptor?.invoke(k) != true) {
+                            controller?.onKeyTapped(k)
+                        }
+                    }
                 }
                 true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 setPressed(false)
-                if (k is Key.Action && k.type == ActionType.BACKSPACE) controller?.onBackspaceUp()
+                if (k is Key.Action && k.type == ActionType.BACKSPACE) {
+                    // Only cancel repeat if not intercepted
+                    if (gifSearchInterceptor == null) controller?.onBackspaceUp()
+                }
                 true
             }
             else -> false

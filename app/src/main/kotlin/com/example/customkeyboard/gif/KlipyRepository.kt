@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit
 object KlipyRepository {
 
     // NOTE: Regenerate this key in your Klipy dashboard — it was exposed in chat.
-    private const val API_KEY = "pf0JUkR9VyZKZxzqG30QgxRawhUxVL6PetvCdHrW7A5bXSN2New8NMyB5Il7vqqi"
+    private const val API_KEY = "pf0JUkR9VyZKZxzqG30QgxRawhUxVL6PetvCdHrW7A5bXSN2New8NMyB5Il7vqqii"
     private const val BASE    = "https://api.klipy.com/api/v1/$API_KEY/gifs"
     private const val PER_PAGE = 24
 

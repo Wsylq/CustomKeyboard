@@ -183,14 +183,12 @@ class KeyboardView @JvmOverloads constructor(
         currentEmojiCategory = category
 
         if (category == EmojiCategory.GIF) {
-            // Show GIF panel, hide emoji scroll view
             showingGifPanel = true
             emojiScrollView?.visibility = View.GONE
 
             if (gifPanelView == null) {
                 val panel = GifPanelView(context).also { panel ->
                     panel.onGifSelected = { url ->
-                        // Commit the GIF URL as text to the input connection
                         controller?.onKeyTapped(Key.Emoji(url))
                     }
                 }
@@ -198,15 +196,40 @@ class KeyboardView @JvmOverloads constructor(
                 addView(panel)
             }
             gifPanelView?.visibility = View.VISIBLE
+            setGifSearchInterceptor(true)
         } else {
-            // Show emoji scroll view, hide GIF panel
             showingGifPanel = false
             gifPanelView?.visibility = View.GONE
             emojiScrollView?.visibility = View.VISIBLE
+            setGifSearchInterceptor(false)
             populateEmojiGrid(category)
         }
 
         requestLayout()
+    }
+
+    /**
+     * Attach or detach the GIF search interceptor on all bottom-row key views.
+     * When active, letter/backspace taps type into the GIF search bar instead of
+     * committing text to the input connection.
+     */
+    private fun setGifSearchInterceptor(active: Boolean) {
+        val interceptor: ((Key) -> Boolean)? = if (active) { key ->
+            val panel = gifPanelView ?: return@if false
+            when {
+                key is Key.Letter -> { panel.appendSearchChar(key.char); true }
+                key is Key.Symbol -> { panel.appendSearchChar(key.char); true }
+                key is Key.Action && key.type == ActionType.BACKSPACE -> {
+                    panel.deleteSearchChar(); true
+                }
+                key is Key.Action && key.type == ActionType.SPACE -> {
+                    panel.appendSearchChar(' '); true
+                }
+                else -> false
+            }
+        } else null
+
+        emojiBottomRowViews.forEach { it.gifSearchInterceptor = interceptor }
     }
 
     private fun makeKeyView(key: Key): KeyView = KeyView(context).also { kv ->
@@ -250,11 +273,9 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun computeTotalHeight(): Int = when (currentLayer) {
         KeyboardLayer.EMOJI -> {
-            val gridH = if (showingGifPanel)
-                (dpToPx(72) * 4 + rowGapPx * 3) // same height as emoji grid
-            else
-                emojiGridHeightPx
-            catBarHeightPx + rowGapPx + gridH + rowGapPx + bottomRowHeightPx + rowGapPx
+            // Match the QWERTY height exactly so the keyboard doesn't resize between layers
+            val rowCount = QwertyLayout.rows.size
+            rowCount * rowHeightPx + (rowCount - 1) * rowGapPx + rowGapPx * 2
         }
         else -> {
             val rowCount = keyRows.size
@@ -288,10 +309,10 @@ class KeyboardView @JvmOverloads constructor(
         layoutCategoryBar(totalWidth, top)
         top += catBarHeightPx + rowGapPx
 
-        val gridH = if (showingGifPanel)
-            (dpToPx(72) * 4 + rowGapPx * 3)
-        else
-            emojiGridHeightPx
+        // Calculate grid height to match QWERTY total height
+        val qwertyRowCount = QwertyLayout.rows.size
+        val qwertyTotalHeight = qwertyRowCount * rowHeightPx + (qwertyRowCount - 1) * rowGapPx + rowGapPx * 2
+        val gridH = qwertyTotalHeight - catBarHeightPx - rowGapPx - bottomRowHeightPx - rowGapPx * 2
 
         if (showingGifPanel) {
             // GIF panel

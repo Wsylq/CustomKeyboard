@@ -5,8 +5,6 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
-import android.text.Editable
-import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -21,34 +19,26 @@ import java.util.concurrent.Executors
 /**
  * Full GIF picker panel — replaces the emoji grid when the GIF tab is selected.
  *
- * Layout:
- *   ┌─────────────────────────────────┐
- *   │  🔍 Search GIFs...              │  ← search bar
- *   ├─────────────────────────────────┤
- *   │  [GIF] [GIF] [GIF]              │  ← 3-column scrollable grid
- *   │  [GIF] [GIF] [GIF]              │
- *   │  ...                            │
- *   │  [Load more]                    │
- *   └─────────────────────────────────┘
- *
- * Tapping a GIF calls [onGifSelected] with the full GIF URL.
+ * The search bar is a non-focusable display-only TextView. Typing is driven
+ * externally via [appendSearchChar] / [deleteSearchChar] so the host keyboard
+ * view can feed key presses into it without spawning a second keyboard.
  */
 class GifPanelView(context: Context) : LinearLayout(context) {
 
     var onGifSelected: ((url: String) -> Unit)? = null
 
-    private val mainHandler  = Handler(Looper.getMainLooper())
-    private val executor     = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val executor    = Executors.newSingleThreadExecutor()
 
-    private lateinit var searchBox:    EditText
-    private lateinit var scrollView:   ScrollView
-    private lateinit var gridLayout:   GridLayout
-    private lateinit var loadMoreBtn:  Button
-    private lateinit var statusLabel:  TextView
-    private lateinit var retryBtn:     Button
+    private lateinit var searchDisplay: TextView   // shows current query (not focusable)
+    private lateinit var scrollView:    ScrollView
+    private lateinit var gridLayout:    GridLayout
+    private lateinit var loadMoreBtn:   Button
+    private lateinit var statusLabel:   TextView
+    private lateinit var retryBtn:      Button
 
-    private var currentQuery: String = ""
-    private var currentPage:  Int    = 1
+    private var currentQuery: String  = ""
+    private var currentPage:  Int     = 1
     private var hasNext:      Boolean = false
     private var isLoading:    Boolean = false
 
@@ -61,10 +51,51 @@ class GifPanelView(context: Context) : LinearLayout(context) {
         loadTrending(reset = true)
     }
 
+    // ── External input API (called by KeyboardView) ───────────────────────────
+
+    /** Append a character to the search query (called when user taps a letter key). */
+    fun appendSearchChar(ch: Char) {
+        currentQuery += ch
+        updateSearchDisplay()
+        scheduleSearch()
+    }
+
+    /** Delete the last character from the search query (called on backspace). */
+    fun deleteSearchChar() {
+        if (currentQuery.isNotEmpty()) {
+            currentQuery = currentQuery.dropLast(1)
+            updateSearchDisplay()
+            scheduleSearch()
+        }
+    }
+
+    /** Clear the search query entirely. */
+    fun clearSearch() {
+        currentQuery = ""
+        updateSearchDisplay()
+        loadTrending(reset = true)
+    }
+
+    private var searchDebounce: Runnable? = null
+    private fun scheduleSearch() {
+        searchDebounce?.let { mainHandler.removeCallbacks(it) }
+        searchDebounce = Runnable {
+            if (currentQuery.isEmpty()) loadTrending(reset = true)
+            else loadSearch(currentQuery, reset = true)
+        }.also { mainHandler.postDelayed(it, 400) }
+    }
+
+    private fun updateSearchDisplay() {
+        searchDisplay.text = if (currentQuery.isEmpty()) "Search GIFs…" else currentQuery
+        searchDisplay.setTextColor(
+            if (currentQuery.isEmpty()) Color.parseColor("#8E8E93") else Color.WHITE
+        )
+    }
+
     // ── UI construction ───────────────────────────────────────────────────────
 
     private fun buildUI() {
-        // Search bar
+        // Search bar (display only — not focusable)
         val searchRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             setBackgroundColor(Color.parseColor("#2C2C2E"))
@@ -72,28 +103,13 @@ class GifPanelView(context: Context) : LinearLayout(context) {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         }
 
-        searchBox = EditText(context).apply {
-            hint = "Search GIFs..."
-            setHintTextColor(Color.parseColor("#8E8E93"))
-            setTextColor(Color.WHITE)
+        searchDisplay = TextView(context).apply {
+            text = "Search GIFs…"
+            setTextColor(Color.parseColor("#8E8E93"))
             textSize = 14f
-            background = null
-            setSingleLine(true)
+            isFocusable = false
+            isFocusableInTouchMode = false
             layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-            addTextChangedListener(object : TextWatcher {
-                private var debounce: Runnable? = null
-                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
-                override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
-                override fun afterTextChanged(s: Editable?) {
-                    debounce?.let { mainHandler.removeCallbacks(it) }
-                    val q = s?.toString()?.trim() ?: ""
-                    debounce = Runnable {
-                        currentQuery = q
-                        if (q.isEmpty()) loadTrending(reset = true)
-                        else loadSearch(q, reset = true)
-                    }.also { mainHandler.postDelayed(it, 400) }
-                }
-            })
         }
 
         val clearBtn = TextView(context).apply {
@@ -101,11 +117,7 @@ class GifPanelView(context: Context) : LinearLayout(context) {
             textSize = 16f
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(dp(8), 0, 0, 0)
-            setOnClickListener {
-                searchBox.text.clear()
-                currentQuery = ""
-                loadTrending(reset = true)
-            }
+            setOnClickListener { clearSearch() }
         }
 
         searchRow.addView(TextView(context).apply {
@@ -114,7 +126,7 @@ class GifPanelView(context: Context) : LinearLayout(context) {
             setTextColor(Color.parseColor("#8E8E93"))
             setPadding(0, 0, dp(8), 0)
         })
-        searchRow.addView(searchBox)
+        searchRow.addView(searchDisplay)
         searchRow.addView(clearBtn)
         addView(searchRow)
 
@@ -255,7 +267,6 @@ class GifPanelView(context: Context) : LinearLayout(context) {
         }
         cell.addView(imageView)
 
-        // Loading placeholder
         val placeholder = View(context).apply {
             setBackgroundColor(Color.parseColor("#3A3A3C"))
             layoutParams = FrameLayout.LayoutParams(
