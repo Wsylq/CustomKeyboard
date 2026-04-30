@@ -52,9 +52,13 @@ enum class ActionType {
     SWITCH_TO_QWERTY,
     SWITCH_TO_EMOJI,
     SWITCH_FROM_EMOJI,
-    COMMA,      // bottom row comma key
-    PERIOD,     // bottom row period key
-    SEARCH      // bottom row search/enter key
+    SWITCH_TO_MORE_SYMBOLS,  // "=\<" button in symbol layout
+    COMMA,
+    PERIOD,
+    SEARCH,
+    UNDERSCORE,              // "_" in symbol bottom row
+    SLASH,                   // "/" in symbol bottom row
+    DONE                     // "✓" checkmark in symbol bottom row
 }
 
 /**

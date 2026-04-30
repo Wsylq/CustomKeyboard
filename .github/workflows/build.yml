@@ -46,3 +46,18 @@ jobs:
           name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
+
+      # Create a GitHub Release with the APK on every push to main
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Build #${{ github.run_number }}"
+          body: |
+            Automated debug build from commit ${{ github.sha }}
+          files: app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

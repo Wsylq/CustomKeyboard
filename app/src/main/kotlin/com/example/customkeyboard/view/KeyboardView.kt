@@ -2,19 +2,20 @@ package com.example.customkeyboard.view
 
 import android.content.Context
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.LinearLayout
 import android.widget.PopupWindow
+import android.widget.ScrollView
 import android.widget.TextView
 import com.example.customkeyboard.controller.KeyboardController
 import com.example.customkeyboard.controller.ViewActions
 import com.example.customkeyboard.model.ActionType
+import com.example.customkeyboard.model.EmojiCategory
 import com.example.customkeyboard.model.EmojiLayout
 import com.example.customkeyboard.model.Key
 import com.example.customkeyboard.model.KeyboardLayer
@@ -22,22 +23,6 @@ import com.example.customkeyboard.model.QwertyLayout
 import com.example.customkeyboard.model.ShiftState
 import com.example.customkeyboard.model.SymbolLayout
 
-/**
- * Full keyboard panel matching the screenshot layout exactly.
- *
- * QWERTY weights per row:
- *   Row 0 (q-p):        10 × 1.0  = 10 units
- *   Row 1 (a-l):         9 × 1.0  =  9 units  (centred via side padding)
- *   Row 2 (shift/bksp): shift=1.5, 7×letter=1.0, bksp=1.5  = 10 units
- *   Row 3 (bottom):     ?123=1.5, comma=0.5, emoji=0.5, space=4.0, period=0.5, search=1.5 = 8.5 units
- *
- * EMOJI layout:
- *   Category bar: 10 icons + backspace (fixed height 40dp)
- *   4 rows of 6 emoji tiles
- *   Bottom row: ABC(1.5) SPACE(4.0) ABC(1.5)
- *
- * Background: #1C1C1E
- */
 class KeyboardView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -46,12 +31,16 @@ class KeyboardView @JvmOverloads constructor(
 
     private var controller: KeyboardController? = null
     private var currentLayer: KeyboardLayer = KeyboardLayer.QWERTY
+    private var currentEmojiCategory: EmojiCategory = EmojiCategory.RECENT
 
-    // All key views in row order
+    // Regular key rows (QWERTY / SYMBOL)
     private var keyRows: List<List<KeyView>> = emptyList()
 
-    // Emoji category bar views (only present in EMOJI layer)
+    // Emoji layer components
     private var categoryBarViews: List<KeyView> = emptyList()
+    private var emojiScrollView: ScrollView? = null
+    private var emojiGridContainer: LinearLayout? = null
+    private var emojiBottomRowViews: List<KeyView> = emptyList()
     private var hasCategoryBar = false
 
     private val handler = Handler(Looper.getMainLooper())
@@ -60,8 +49,10 @@ class KeyboardView @JvmOverloads constructor(
 
     // ── Dimensions ───────────────────────────────────────────────────────────
     private val rowHeightPx:      Int get() = dpToPx(52)
-    private val emojiRowHeightPx: Int get() = dpToPx(68)
+    private val emojiRowHeightPx: Int get() = dpToPx(72)
     private val catBarHeightPx:   Int get() = dpToPx(44)
+    private val emojiGridHeightPx:Int get() = dpToPx(72 * 4 + 4 * 3) // 4 rows visible
+    private val bottomRowHeightPx:Int get() = dpToPx(56)
     private val keyGapPx:         Int get() = dpToPx(6)
     private val rowGapPx:         Int get() = dpToPx(4)
     private val sidePadPx:        Int get() = dpToPx(4)
@@ -83,6 +74,10 @@ class KeyboardView @JvmOverloads constructor(
         currentLayer = layer
         hasCategoryBar = false
         categoryBarViews = emptyList()
+        emojiScrollView = null
+        emojiGridContainer = null
+        emojiBottomRowViews = emptyList()
+        keyRows = emptyList()
 
         when (layer) {
             KeyboardLayer.QWERTY -> inflateQwerty()
@@ -92,36 +87,89 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun inflateQwerty() {
-        keyRows = QwertyLayout.rows.map { row ->
-            row.map { key -> makeKeyView(key) }
-        }
+        keyRows = QwertyLayout.rows.map { row -> row.map { makeKeyView(it) } }
         keyRows.flatten().forEach { addView(it) }
     }
 
     private fun inflateSymbol() {
-        keyRows = SymbolLayout.rows.map { row ->
-            row.map { key -> makeKeyView(key) }
-        }
+        keyRows = SymbolLayout.rows.map { row -> row.map { makeKeyView(it) } }
         keyRows.flatten().forEach { addView(it) }
     }
 
     private fun inflateEmoji() {
         hasCategoryBar = true
 
-        // Category bar: Unicode icon keys + backspace
-        val catViews = EmojiLayout.categoryBar.map { key -> makeKeyView(key) }
-        categoryBarViews = catViews
-        catViews.forEach { addView(it) }
-
-        // Emoji grid rows
-        keyRows = EmojiLayout.rows.map { row ->
-            row.map { key ->
-                makeKeyView(key).also { kv ->
-                    if (key is Key.Emoji) kv.isEmojiGridKey = true
+        // 1. Category bar
+        val catViews = EmojiLayout.categoryBar.map { key ->
+            makeKeyView(key).also { kv ->
+                if (key is Key.CategoryIcon) {
+                    kv.setOnCategoryTapListener { cat -> switchEmojiCategory(cat) }
                 }
             }
         }
-        keyRows.flatten().forEach { addView(it) }
+        categoryBarViews = catViews
+        catViews.forEach { addView(it) }
+
+        // 2. Scrollable emoji grid
+        val scrollView = ScrollView(context).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = OVER_SCROLL_NEVER
+        }
+        val gridContainer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        scrollView.addView(gridContainer)
+        addView(scrollView)
+        emojiScrollView = scrollView
+        emojiGridContainer = gridContainer
+
+        // 3. Bottom row
+        val bottomViews = EmojiLayout.bottomRow.map { makeKeyView(it) }
+        emojiBottomRowViews = bottomViews
+        bottomViews.forEach { addView(it) }
+
+        // Populate grid with current category
+        populateEmojiGrid(currentEmojiCategory)
+    }
+
+    private fun populateEmojiGrid(category: EmojiCategory) {
+        val container = emojiGridContainer ?: return
+        container.removeAllViews()
+
+        val rows = EmojiLayout.rowsForCategory(category)
+        rows.forEach { row ->
+            val rowLayout = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    emojiRowHeightPx
+                ).also { it.bottomMargin = rowGapPx }
+            }
+            val totalWeight = row.size.toFloat()
+            row.forEach { key ->
+                val kv = makeKeyView(key).also { it.isEmojiGridKey = true }
+                val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
+                lp.setMargins(keyGapPx / 2, 0, keyGapPx / 2, 0)
+                kv.layoutParams = lp
+                rowLayout.addView(kv)
+            }
+            container.addView(rowLayout)
+        }
+
+        // Update category bar highlight
+        categoryBarViews.forEach { kv ->
+            val k = kv.key
+            if (k is Key.CategoryIcon) {
+                kv.isSelectedCategory = (k.category == category)
+            }
+        }
+
+        emojiScrollView?.scrollTo(0, 0)
+    }
+
+    fun switchEmojiCategory(category: EmojiCategory) {
+        currentEmojiCategory = category
+        populateEmojiGrid(category)
     }
 
     private fun makeKeyView(key: Key): KeyView = KeyView(context).also { kv ->
@@ -131,7 +179,17 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun rewireController() {
         categoryBarViews.forEach { it.controller = controller }
+        emojiBottomRowViews.forEach { it.controller = controller }
         keyRows.flatten().forEach { it.controller = controller }
+        // Rewire emoji grid views inside the scroll container
+        emojiGridContainer?.let { container ->
+            for (i in 0 until container.childCount) {
+                val row = container.getChildAt(i) as? LinearLayout ?: continue
+                for (j in 0 until row.childCount) {
+                    (row.getChildAt(j) as? KeyView)?.controller = controller
+                }
+            }
+        }
     }
 
     // ── Measure ──────────────────────────────────────────────────────────────
@@ -142,19 +200,13 @@ class KeyboardView @JvmOverloads constructor(
         setMeasuredDimension(w, h)
     }
 
-    private fun computeTotalHeight(): Int {
-        return when (currentLayer) {
-            KeyboardLayer.EMOJI -> {
-                val catBar = if (hasCategoryBar) catBarHeightPx + rowGapPx else 0
-                val gridRows = EmojiLayout.emojiRows.size
-                val bottomRow = 1
-                val totalRows = gridRows + bottomRow
-                catBar + totalRows * emojiRowHeightPx + (totalRows - 1) * rowGapPx + rowGapPx
-            }
-            else -> {
-                val rowCount = keyRows.size
-                rowCount * rowHeightPx + (rowCount - 1) * rowGapPx + rowGapPx * 2
-            }
+    private fun computeTotalHeight(): Int = when (currentLayer) {
+        KeyboardLayer.EMOJI -> {
+            catBarHeightPx + rowGapPx + emojiGridHeightPx + rowGapPx + bottomRowHeightPx + rowGapPx
+        }
+        else -> {
+            val rowCount = keyRows.size
+            rowCount * rowHeightPx + (rowCount - 1) * rowGapPx + rowGapPx * 2
         }
     }
 
@@ -162,23 +214,42 @@ class KeyboardView @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         val totalWidth = r - l
-        var top = rowGapPx
 
-        if (hasCategoryBar) {
-            layoutCategoryBar(totalWidth, top)
-            top += catBarHeightPx + rowGapPx
-        }
-
-        val rows = keyRows
-        rows.forEachIndexed { index, row ->
-            val rowH = if (currentLayer == KeyboardLayer.EMOJI) emojiRowHeightPx else rowHeightPx
-            layoutRow(row, totalWidth, top, rowH, index)
-            top += rowH + rowGapPx
+        when (currentLayer) {
+            KeyboardLayer.EMOJI -> layoutEmoji(totalWidth)
+            else -> layoutRegular(totalWidth)
         }
     }
 
+    private fun layoutRegular(totalWidth: Int) {
+        var top = rowGapPx
+        keyRows.forEachIndexed { index, row ->
+            layoutRow(row, totalWidth, top, rowHeightPx, index)
+            top += rowHeightPx + rowGapPx
+        }
+    }
+
+    private fun layoutEmoji(totalWidth: Int) {
+        var top = rowGapPx
+
+        // Category bar
+        layoutCategoryBar(totalWidth, top)
+        top += catBarHeightPx + rowGapPx
+
+        // Scrollable grid
+        val scrollView = emojiScrollView ?: return
+        scrollView.measure(
+            MeasureSpec.makeMeasureSpec(totalWidth, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(emojiGridHeightPx, MeasureSpec.EXACTLY)
+        )
+        scrollView.layout(0, top, totalWidth, top + emojiGridHeightPx)
+        top += emojiGridHeightPx + rowGapPx
+
+        // Bottom row
+        layoutBottomRow(emojiBottomRowViews, totalWidth, top, bottomRowHeightPx)
+    }
+
     private fun layoutCategoryBar(totalWidth: Int, top: Int) {
-        // 11 equal slots
         val count = categoryBarViews.size
         val available = totalWidth - keyGapPx * (count + 1)
         val slotW = available / count
@@ -193,18 +264,29 @@ class KeyboardView @JvmOverloads constructor(
         }
     }
 
-    private fun layoutRow(
-        row: List<KeyView>,
-        totalWidth: Int,
-        top: Int,
-        rowH: Int,
-        rowIndex: Int
-    ) {
-        val weights = row.map { kv -> keyWeight(kv.key, rowIndex) }
+    private fun layoutBottomRow(views: List<KeyView>, totalWidth: Int, top: Int, rowH: Int) {
+        val weights = views.map { kv -> keyWeight(kv.key) }
+        val totalWeight = weights.sum()
+        val available = totalWidth - keyGapPx * (views.size + 1)
+        var left = keyGapPx
+        views.forEachIndexed { i, kv ->
+            val keyW = ((available * weights[i]) / totalWeight).toInt()
+            kv.measure(
+                MeasureSpec.makeMeasureSpec(keyW, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(rowH, MeasureSpec.EXACTLY)
+            )
+            kv.layout(left, top, left + keyW, top + rowH)
+            left += keyW + keyGapPx
+        }
+    }
+
+    private fun layoutRow(row: List<KeyView>, totalWidth: Int, top: Int, rowH: Int, rowIndex: Int) {
+        val weights = row.map { kv -> keyWeight(kv.key) }
         val totalWeight = weights.sum()
 
-        // Row 1 (home row, 9 keys) is centred — add side padding
-        val isHomeRow = currentLayer == KeyboardLayer.QWERTY && rowIndex == 1
+        // Home row (row 1 in QWERTY, row 1 in SYMBOL) — centred
+        val isHomeRow = (currentLayer == KeyboardLayer.QWERTY && rowIndex == 1) ||
+                        (currentLayer == KeyboardLayer.SYMBOL && rowIndex == 1)
         val sidePad = if (isHomeRow) dpToPx(18) else sidePadPx
 
         val available = totalWidth - keyGapPx * (row.size + 1) - sidePad * 2
@@ -221,27 +303,23 @@ class KeyboardView @JvmOverloads constructor(
         }
     }
 
-    /**
-     * Weight for each key type, per row.
-     *
-     * QWERTY row 2 (shift row): Shift=1.5, letters=1.0, Backspace=1.5
-     * QWERTY row 3 (bottom):    ?123=1.5, comma=1.0, emoji=1.0, space=4.0, period=1.0, search=1.5
-     * Emoji bottom row:         ABC=1.5, space=4.0, ABC=1.5
-     * Everything else:          1.0
-     */
-    private fun keyWeight(key: Key?, rowIndex: Int): Float {
+    private fun keyWeight(key: Key?): Float {
         if (key !is Key.Action) return 1f
         return when (key.type) {
-            ActionType.SHIFT              -> 1.5f
-            ActionType.BACKSPACE          -> 1.5f
-            ActionType.SPACE              -> 4.0f
-            ActionType.SWITCH_TO_SYMBOLS  -> 1.5f
-            ActionType.SWITCH_TO_QWERTY   -> 1.5f
-            ActionType.SWITCH_FROM_EMOJI  -> 1.5f
-            ActionType.COMMA              -> 1.0f
-            ActionType.PERIOD             -> 1.0f
-            ActionType.SWITCH_TO_EMOJI    -> 1.0f
-            ActionType.SEARCH             -> 1.5f
+            ActionType.SHIFT                -> 1.5f
+            ActionType.BACKSPACE            -> 1.5f
+            ActionType.SPACE                -> 4.0f
+            ActionType.SWITCH_TO_SYMBOLS    -> 1.5f
+            ActionType.SWITCH_TO_QWERTY     -> 1.5f
+            ActionType.SWITCH_FROM_EMOJI    -> 1.5f
+            ActionType.SWITCH_TO_MORE_SYMBOLS -> 1.5f
+            ActionType.COMMA                -> 1.0f
+            ActionType.PERIOD               -> 1.0f
+            ActionType.SWITCH_TO_EMOJI      -> 1.0f
+            ActionType.SEARCH               -> 1.5f
+            ActionType.UNDERSCORE           -> 1.0f
+            ActionType.SLASH                -> 1.0f
+            ActionType.DONE                 -> 1.5f
             else -> 1f
         }
     }
@@ -250,6 +328,7 @@ class KeyboardView @JvmOverloads constructor(
 
     override fun switchLayer(layer: KeyboardLayer) {
         dismissKeyPreview()
+        if (layer == KeyboardLayer.EMOJI) currentEmojiCategory = EmojiCategory.RECENT
         inflateLayer(layer)
         rewireController()
         requestLayout()
@@ -264,10 +343,11 @@ class KeyboardView @JvmOverloads constructor(
 
     override fun updateEnterLabel(imeOptions: Int) {
         keyRows.flatten()
-            .firstOrNull { kv -> kv.key is Key.Action &&
-                    ((kv.key as Key.Action).type == ActionType.ENTER ||
-                     (kv.key as Key.Action).type == ActionType.SEARCH) }
-            ?.let { kv -> kv.tag = imeOptions; kv.invalidate() }
+            .firstOrNull { kv ->
+                kv.key is Key.Action && ((kv.key as Key.Action).type == ActionType.ENTER ||
+                        (kv.key as Key.Action).type == ActionType.SEARCH ||
+                        (kv.key as Key.Action).type == ActionType.DONE)
+            }?.let { kv -> kv.tag = imeOptions; kv.invalidate() }
     }
 
     override fun showKeyPreview(key: Key) {
@@ -296,8 +376,6 @@ class KeyboardView @JvmOverloads constructor(
         previewPopup?.dismiss()
         previewPopup = null
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun dpToPx(dp: Int): Int =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp.toFloat(), resources.displayMetrics).toInt()

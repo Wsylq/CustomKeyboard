@@ -150,11 +150,16 @@ class KeyboardController(
                     currentLayer = KeyboardLayer.QWERTY
                     viewActions.switchLayer(KeyboardLayer.QWERTY)
                 }
+                ActionType.SWITCH_TO_MORE_SYMBOLS -> {
+                    // Future: switch to extended symbol page; for now no-op
+                }
                 ActionType.SHIFT -> onShiftTapped()
                 ActionType.SPACE -> inputActions.commitText(" ")
                 ActionType.COMMA -> inputActions.commitText(",")
                 ActionType.PERIOD -> inputActions.commitText(".")
-                ActionType.SEARCH, ActionType.ENTER -> {
+                ActionType.UNDERSCORE -> inputActions.commitText("_")
+                ActionType.SLASH -> inputActions.commitText("/")
+                ActionType.DONE, ActionType.SEARCH, ActionType.ENTER -> {
                     val actionCode = when (currentImeOptions and 0xFF) {
                         IME_ACTION_DONE -> IME_ACTION_DONE
                         IME_ACTION_SEARCH -> IME_ACTION_SEARCH
