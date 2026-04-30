@@ -22,6 +22,7 @@ import com.example.customkeyboard.model.KeyboardLayer
 import com.example.customkeyboard.model.QwertyLayout
 import com.example.customkeyboard.model.ShiftState
 import com.example.customkeyboard.model.SymbolLayout
+import com.example.customkeyboard.settings.KeyboardHeightManager
 
 class KeyboardView @JvmOverloads constructor(
     context: Context,
@@ -48,14 +49,16 @@ class KeyboardView @JvmOverloads constructor(
     private val dismissPreviewRunnable = Runnable { dismissKeyPreview() }
 
     // ── Dimensions ───────────────────────────────────────────────────────────
-    private val rowHeightPx:      Int get() = dpToPx(52)
-    private val emojiRowHeightPx: Int get() = dpToPx(72)
-    private val catBarHeightPx:   Int get() = dpToPx(44)
-    private val emojiGridHeightPx:Int get() = dpToPx(72 * 4 + 4 * 3) // 4 rows visible
-    private val bottomRowHeightPx:Int get() = dpToPx(56)
-    private val keyGapPx:         Int get() = dpToPx(6)
-    private val rowGapPx:         Int get() = dpToPx(4)
-    private val sidePadPx:        Int get() = dpToPx(4)
+    // Base row height is 52dp, scaled by user preference
+    private val heightScale: Float get() = KeyboardHeightManager.getScale(context)
+    private val rowHeightPx:       Int get() = (dpToPx(52) * heightScale).toInt()
+    private val emojiRowHeightPx:  Int get() = (dpToPx(72) * heightScale).toInt()
+    private val catBarHeightPx:    Int get() = (dpToPx(44) * heightScale).toInt()
+    private val emojiGridHeightPx: Int get() = emojiRowHeightPx * 4 + rowGapPx * 3
+    private val bottomRowHeightPx: Int get() = (dpToPx(56) * heightScale).toInt()
+    private val keyGapPx:          Int get() = dpToPx(6)
+    private val rowGapPx:          Int get() = dpToPx(4)
+    private val sidePadPx:         Int get() = dpToPx(4)
 
     init {
         setBackgroundColor(Color.parseColor("#1C1C1E"))

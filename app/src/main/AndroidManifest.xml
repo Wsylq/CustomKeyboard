@@ -25,6 +25,18 @@
                 android:resource="@xml/method" />
         </service>
 
+        <!-- Settings activity — launched from the app icon -->
+        <activity
+            android:name=".settings.KeyboardSettingsActivity"
+            android:label="@string/settings_title"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 </manifest>

@@ -3,4 +3,5 @@
     <string name="app_name">Custom Keyboard</string>
     <string name="ime_name">Custom Keyboard</string>
     <string name="subtype_en_us">English (US)</string>
+    <string name="settings_title">Keyboard Settings</string>
 </resources>
