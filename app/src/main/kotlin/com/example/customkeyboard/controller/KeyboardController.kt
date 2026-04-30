@@ -114,6 +114,7 @@ class KeyboardController(
      */
     fun onKeyTapped(key: Key) {
         when (key) {
+            is Key.CategoryIcon -> { /* category bar tap — no text output */ }
             is Key.Letter -> {
                 val char = if (shiftState == ShiftState.OFF) key.char.lowercaseChar() else key.char.uppercaseChar()
                 inputActions.commitText(char.toString())
