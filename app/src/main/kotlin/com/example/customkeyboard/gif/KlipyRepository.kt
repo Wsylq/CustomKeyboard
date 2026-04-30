@@ -7,7 +7,6 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.IOException
 import java.net.Inet4Address
-import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 
 /**
@@ -31,11 +30,13 @@ object KlipyRepository {
     private const val PER_PAGE = 24
 
     /** Prefer IPv4 addresses to avoid IPv6 connectivity failures on some devices/networks. */
-    private val ipv4Dns = Dns { hostname ->
-        val addresses = Dns.SYSTEM.lookup(hostname)
-        // Put IPv4 addresses first; fall back to IPv6 if no IPv4 available
-        val ipv4 = addresses.filterIsInstance<Inet4Address>()
-        if (ipv4.isNotEmpty()) ipv4 else addresses
+    private val ipv4Dns = object : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            val addresses = Dns.SYSTEM.lookup(hostname)
+            // Put IPv4 addresses first; fall back to IPv6 if no IPv4 available
+            val ipv4 = addresses.filterIsInstance<Inet4Address>()
+            return if (ipv4.isNotEmpty()) ipv4 else addresses
+        }
     }
 
     private val client = OkHttpClient.Builder()
