@@ -45,6 +45,7 @@ class GifPanelView(context: Context) : LinearLayout(context) {
     private lateinit var gridLayout:   GridLayout
     private lateinit var loadMoreBtn:  Button
     private lateinit var statusLabel:  TextView
+    private lateinit var retryBtn:     Button
 
     private var currentQuery: String = ""
     private var currentPage:  Int    = 1
@@ -123,9 +124,32 @@ class GifPanelView(context: Context) : LinearLayout(context) {
             setTextColor(Color.parseColor("#8E8E93"))
             gravity = Gravity.CENTER
             visibility = View.GONE
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dp(40))
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
+                it.topMargin = dp(8)
+            }
         }
         addView(statusLabel)
+
+        // Retry button (shown on error)
+        retryBtn = Button(context).apply {
+            text = "Retry"
+            textSize = 13f
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#3A3A3C"))
+            visibility = View.GONE
+            layoutParams = LayoutParams(dp(100), dp(36)).also {
+                it.gravity = Gravity.CENTER_HORIZONTAL
+                it.topMargin = dp(8)
+                it.bottomMargin = dp(8)
+            }
+            setOnClickListener {
+                retryBtn.visibility = View.GONE
+                if (currentQuery.isEmpty()) loadTrending(reset = true)
+                else loadSearch(currentQuery, reset = true)
+            }
+        }
+        addView(retryBtn)
 
         // Scrollable grid
         scrollView = ScrollView(context).apply {
@@ -192,6 +216,10 @@ class GifPanelView(context: Context) : LinearLayout(context) {
 
     private fun onPageLoaded(page: KlipyRepository.GifPage, reset: Boolean) {
         setLoading(false)
+        if (page.error != null) {
+            showStatus("Failed to load GIFs\n${page.error}", showRetry = true)
+            return
+        }
         if (page.items.isEmpty() && reset) {
             showStatus("No GIFs found")
             return
@@ -271,13 +299,15 @@ class GifPanelView(context: Context) : LinearLayout(context) {
         if (loading) showStatus("Loading…") else hideStatus()
     }
 
-    private fun showStatus(msg: String) {
+    private fun showStatus(msg: String, showRetry: Boolean = false) {
         statusLabel.text = msg
         statusLabel.visibility = View.VISIBLE
+        retryBtn.visibility = if (showRetry) View.VISIBLE else View.GONE
     }
 
     private fun hideStatus() {
         statusLabel.visibility = View.GONE
+        retryBtn.visibility = View.GONE
     }
 
     private fun dp(dp: Int): Int =

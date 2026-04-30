@@ -44,7 +44,8 @@ object KlipyRepository {
 
     data class GifPage(
         val items: List<GifItem>,
-        val hasNext: Boolean
+        val hasNext: Boolean,
+        val error: String? = null
     )
 
     /** Fetches trending GIFs. Runs on the calling thread — call from a background thread. */
@@ -61,14 +62,21 @@ object KlipyRepository {
     }
 
     private fun fetch(url: String): GifPage {
-        val request = Request.Builder().url(url).build()
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            Log.e("KlipyRepo", "HTTP ${response.code} for $url")
-            return GifPage(emptyList(), false)
+        return try {
+            val request = Request.Builder().url(url).build()
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                val msg = "HTTP ${response.code}"
+                Log.e("KlipyRepo", "$msg for $url")
+                return GifPage(emptyList(), false, error = msg)
+            }
+            val body = response.body?.string()
+                ?: return GifPage(emptyList(), false, error = "Empty response")
+            parse(body)
+        } catch (e: IOException) {
+            Log.e("KlipyRepo", "Network error: ${e.message}")
+            GifPage(emptyList(), false, error = "Network error: ${e.message}")
         }
-        val body = response.body?.string() ?: return GifPage(emptyList(), false)
-        return parse(body)
     }
 
     private fun parse(json: String): GifPage {
@@ -103,7 +111,7 @@ object KlipyRepository {
             GifPage(items, hasNext)
         } catch (e: Exception) {
             Log.e("KlipyRepo", "Parse error: ${e.message}")
-            GifPage(emptyList(), false)
+            GifPage(emptyList(), false, error = "Parse error: ${e.message}")
         }
     }
 }
