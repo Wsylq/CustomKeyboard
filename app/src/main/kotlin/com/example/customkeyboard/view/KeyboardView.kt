@@ -56,7 +56,7 @@ class KeyboardView @JvmOverloads constructor(
     // Scale is read fresh on every layout pass — no caching, no stale values.
     private val heightScale: Float get() = KeyboardHeightManager.getScale(context)
     private val rowHeightPx:       Int get() = (dpToPx(52) * heightScale).toInt()
-    private val emojiRowHeightPx:  Int get() = (dpToPx(72) * heightScale).toInt()
+    private val emojiRowHeightPx:  Int get() = (dpToPx(52) * heightScale).toInt()
     private val catBarHeightPx:    Int get() = (dpToPx(44) * heightScale).toInt()
     private val emojiGridHeightPx: Int get() = emojiRowHeightPx * 4 + rowGapPx * 3
     private val bottomRowHeightPx: Int get() = (dpToPx(56) * heightScale).toInt()

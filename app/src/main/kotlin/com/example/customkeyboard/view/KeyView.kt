@@ -48,6 +48,10 @@ class KeyView @JvmOverloads constructor(
     fun setOnCategoryTapListener(l: (EmojiCategory) -> Unit) { onCategoryTap = l }
 
     private var isKeyPressed = false
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private var touchMoved  = false
+    private val SCROLL_SLOP = 8f // dp — movement beyond this cancels the tap
 
     // ── Colours ──────────────────────────────────────────────────────────────
     private val bgNormal      = Color.parseColor("#2C2C2E")
@@ -158,7 +162,7 @@ class KeyView @JvmOverloads constructor(
     // ── Emoji ────────────────────────────────────────────────────────────────
 
     private fun drawEmoji(canvas: Canvas, emoji: String) {
-        mainPaint.textSize = sp(if (isEmojiGridKey) 30f else 18f)
+        mainPaint.textSize = sp(if (isEmojiGridKey) 22f else 18f)
         mainPaint.color = colorWhite
         val cx = width / 2f
         val cy = height / 2f - (mainPaint.descent() + mainPaint.ascent()) / 2f
@@ -240,31 +244,60 @@ class KeyView @JvmOverloads constructor(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val k = key ?: return false
+        val slopPx = dpToPx(SCROLL_SLOP.toInt()).toFloat()
+
         return when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                touchStartX = event.x
+                touchStartY = event.y
+                touchMoved  = false
                 setPressed(true)
+                // Backspace and shift fire on DOWN (for repeat / double-tap detection)
                 when {
                     k is Key.CategoryIcon -> onCategoryTap?.invoke(k.category)
                     k is Key.Action && k.type == ActionType.BACKSPACE -> {
-                        // Route backspace to GIF search if interceptor is active
-                        if (gifSearchInterceptor?.invoke(k) != true) {
-                            controller?.onBackspaceDown()
-                        }
+                        if (gifSearchInterceptor?.invoke(k) != true) controller?.onBackspaceDown()
                     }
                     k is Key.Action && k.type == ActionType.SHIFT -> controller?.onShiftTapped()
-                    else -> {
-                        // Route letter/symbol to GIF search if interceptor is active
-                        if (gifSearchInterceptor?.invoke(k) != true) {
-                            controller?.onKeyTapped(k)
+                    // Everything else (including emoji) fires on UP — see ACTION_UP below
+                }
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = Math.abs(event.x - touchStartX)
+                val dy = Math.abs(event.y - touchStartY)
+                if (dx > slopPx || dy > slopPx) {
+                    touchMoved = true
+                    setPressed(false)
+                    // Cancel backspace repeat if finger dragged away
+                    if (k is Key.Action && k.type == ActionType.BACKSPACE) {
+                        if (gifSearchInterceptor == null) controller?.onBackspaceUp()
+                    }
+                }
+                true
+            }
+            MotionEvent.ACTION_UP -> {
+                setPressed(false)
+                if (k is Key.Action && k.type == ActionType.BACKSPACE) {
+                    if (gifSearchInterceptor == null) controller?.onBackspaceUp()
+                }
+                // Only commit the key if the finger didn't scroll away
+                if (!touchMoved) {
+                    when {
+                        k is Key.CategoryIcon -> { /* already fired on DOWN */ }
+                        k is Key.Action && k.type == ActionType.BACKSPACE -> { /* handled on DOWN */ }
+                        k is Key.Action && k.type == ActionType.SHIFT -> { /* handled on DOWN */ }
+                        else -> {
+                            if (gifSearchInterceptor?.invoke(k) != true) controller?.onKeyTapped(k)
                         }
                     }
                 }
                 true
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_CANCEL -> {
+                touchMoved = true
                 setPressed(false)
                 if (k is Key.Action && k.type == ActionType.BACKSPACE) {
-                    // Only cancel repeat if not intercepted
                     if (gifSearchInterceptor == null) controller?.onBackspaceUp()
                 }
                 true
