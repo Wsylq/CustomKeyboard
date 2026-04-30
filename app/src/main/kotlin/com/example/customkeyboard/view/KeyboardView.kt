@@ -7,6 +7,7 @@ import android.os.Looper
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.PopupWindow
@@ -14,6 +15,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.example.customkeyboard.controller.KeyboardController
 import com.example.customkeyboard.controller.ViewActions
+import com.example.customkeyboard.gif.GifPanelView
 import com.example.customkeyboard.model.ActionType
 import com.example.customkeyboard.model.EmojiCategory
 import com.example.customkeyboard.model.EmojiLayout
@@ -42,7 +44,9 @@ class KeyboardView @JvmOverloads constructor(
     private var emojiScrollView: ScrollView? = null
     private var emojiGridContainer: LinearLayout? = null
     private var emojiBottomRowViews: List<KeyView> = emptyList()
+    private var gifPanelView: GifPanelView? = null
     private var hasCategoryBar = false
+    private var showingGifPanel = false
 
     private val handler = Handler(Looper.getMainLooper())
     private var previewPopup: PopupWindow? = null
@@ -83,6 +87,8 @@ class KeyboardView @JvmOverloads constructor(
         emojiScrollView = null
         emojiGridContainer = null
         emojiBottomRowViews = emptyList()
+        gifPanelView = null
+        showingGifPanel = false
         keyRows = emptyList()
 
         when (layer) {
@@ -175,7 +181,32 @@ class KeyboardView @JvmOverloads constructor(
 
     fun switchEmojiCategory(category: EmojiCategory) {
         currentEmojiCategory = category
-        populateEmojiGrid(category)
+
+        if (category == EmojiCategory.GIF) {
+            // Show GIF panel, hide emoji scroll view
+            showingGifPanel = true
+            emojiScrollView?.visibility = View.GONE
+
+            if (gifPanelView == null) {
+                val panel = GifPanelView(context).also { panel ->
+                    panel.onGifSelected = { url ->
+                        // Commit the GIF URL as text to the input connection
+                        controller?.onKeyTapped(Key.Emoji(url))
+                    }
+                }
+                gifPanelView = panel
+                addView(panel)
+            }
+            gifPanelView?.visibility = View.VISIBLE
+        } else {
+            // Show emoji scroll view, hide GIF panel
+            showingGifPanel = false
+            gifPanelView?.visibility = View.GONE
+            emojiScrollView?.visibility = View.VISIBLE
+            populateEmojiGrid(category)
+        }
+
+        requestLayout()
     }
 
     private fun makeKeyView(key: Key): KeyView = KeyView(context).also { kv ->
@@ -219,7 +250,11 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun computeTotalHeight(): Int = when (currentLayer) {
         KeyboardLayer.EMOJI -> {
-            catBarHeightPx + rowGapPx + emojiGridHeightPx + rowGapPx + bottomRowHeightPx + rowGapPx
+            val gridH = if (showingGifPanel)
+                (dpToPx(72) * 4 + rowGapPx * 3) // same height as emoji grid
+            else
+                emojiGridHeightPx
+            catBarHeightPx + rowGapPx + gridH + rowGapPx + bottomRowHeightPx + rowGapPx
         }
         else -> {
             val rowCount = keyRows.size
@@ -253,14 +288,30 @@ class KeyboardView @JvmOverloads constructor(
         layoutCategoryBar(totalWidth, top)
         top += catBarHeightPx + rowGapPx
 
-        // Scrollable grid
-        val scrollView = emojiScrollView ?: return
-        scrollView.measure(
-            MeasureSpec.makeMeasureSpec(totalWidth, MeasureSpec.EXACTLY),
-            MeasureSpec.makeMeasureSpec(emojiGridHeightPx, MeasureSpec.EXACTLY)
-        )
-        scrollView.layout(0, top, totalWidth, top + emojiGridHeightPx)
-        top += emojiGridHeightPx + rowGapPx
+        val gridH = if (showingGifPanel)
+            (dpToPx(72) * 4 + rowGapPx * 3)
+        else
+            emojiGridHeightPx
+
+        if (showingGifPanel) {
+            // GIF panel
+            gifPanelView?.let { panel ->
+                panel.measure(
+                    MeasureSpec.makeMeasureSpec(totalWidth, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(gridH, MeasureSpec.EXACTLY)
+                )
+                panel.layout(0, top, totalWidth, top + gridH)
+            }
+        } else {
+            // Emoji scroll view
+            val scrollView = emojiScrollView ?: return
+            scrollView.measure(
+                MeasureSpec.makeMeasureSpec(totalWidth, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(gridH, MeasureSpec.EXACTLY)
+            )
+            scrollView.layout(0, top, totalWidth, top + gridH)
+        }
+        top += gridH + rowGapPx
 
         // Bottom row
         layoutBottomRow(emojiBottomRowViews, totalWidth, top, bottomRowHeightPx)
