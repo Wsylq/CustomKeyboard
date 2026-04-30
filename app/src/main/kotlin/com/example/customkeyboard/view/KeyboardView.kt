@@ -108,10 +108,8 @@ class KeyboardView @JvmOverloads constructor(
     private fun inflateEmoji() {
         hasCategoryBar = true
 
-        // Category bar: icons + backspace
-        val catViews = EmojiLayout.categoryIcons.map { icon ->
-            makeKeyView(Key.Emoji(icon)).also { it.isEmojiGridKey = false }
-        } + listOf(makeKeyView(Key.Action(ActionType.BACKSPACE)))
+        // Category bar: Unicode icon keys + backspace
+        val catViews = EmojiLayout.categoryBar.map { key -> makeKeyView(key) }
         categoryBarViews = catViews
         catViews.forEach { addView(it) }
 
@@ -227,23 +225,23 @@ class KeyboardView @JvmOverloads constructor(
      * Weight for each key type, per row.
      *
      * QWERTY row 2 (shift row): Shift=1.5, letters=1.0, Backspace=1.5
-     * QWERTY row 3 (bottom):    ?123=1.5, comma=0.5, emoji=0.5, space=4.0, period=0.5, search=1.5
+     * QWERTY row 3 (bottom):    ?123=1.5, comma=1.0, emoji=1.0, space=4.0, period=1.0, search=1.5
      * Emoji bottom row:         ABC=1.5, space=4.0, ABC=1.5
      * Everything else:          1.0
      */
     private fun keyWeight(key: Key?, rowIndex: Int): Float {
         if (key !is Key.Action) return 1f
         return when (key.type) {
-            ActionType.SHIFT            -> 1.5f
-            ActionType.BACKSPACE        -> 1.5f
-            ActionType.SPACE            -> 4.0f
+            ActionType.SHIFT              -> 1.5f
+            ActionType.BACKSPACE          -> 1.5f
+            ActionType.SPACE              -> 4.0f
             ActionType.SWITCH_TO_SYMBOLS  -> 1.5f
             ActionType.SWITCH_TO_QWERTY   -> 1.5f
             ActionType.SWITCH_FROM_EMOJI  -> 1.5f
-            ActionType.COMMA            -> 0.5f
-            ActionType.PERIOD           -> 0.5f
-            ActionType.SWITCH_TO_EMOJI  -> 0.5f
-            ActionType.SEARCH           -> 1.5f
+            ActionType.COMMA              -> 1.0f
+            ActionType.PERIOD             -> 1.0f
+            ActionType.SWITCH_TO_EMOJI    -> 1.0f
+            ActionType.SEARCH             -> 1.5f
             else -> 1f
         }
     }

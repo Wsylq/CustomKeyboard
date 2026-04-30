@@ -13,6 +13,7 @@ import android.view.MotionEvent
 import android.view.View
 import com.example.customkeyboard.controller.KeyboardController
 import com.example.customkeyboard.model.ActionType
+import com.example.customkeyboard.model.EmojiCategory
 import com.example.customkeyboard.model.Key
 import com.example.customkeyboard.model.ShiftState
 
@@ -80,8 +81,9 @@ class KeyView @JvmOverloads constructor(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        // Only enforce minimum height — width is fully controlled by KeyboardView layout
         setMeasuredDimension(
-            maxOf(measuredWidth,  minTouchPx),
+            measuredWidth,
             maxOf(measuredHeight, minTouchPx)
         )
     }
@@ -98,17 +100,19 @@ class KeyView @JvmOverloads constructor(
         canvas.drawRoundRect(bgRect, cornerPx, cornerPx, bgPaint)
 
         when (k) {
-            is Key.Emoji -> drawEmoji(canvas, k.emoji)
-            is Key.Action -> drawAction(canvas, k)
-            is Key.Letter -> drawLetter(canvas, k)
-            is Key.Symbol -> drawSymbol(canvas, k)
+            is Key.Emoji         -> drawEmoji(canvas, k.emoji)
+            is Key.CategoryIcon  -> drawCategoryIcon(canvas, k.category)
+            is Key.Action        -> drawAction(canvas, k)
+            is Key.Letter        -> drawLetter(canvas, k)
+            is Key.Symbol        -> drawSymbol(canvas, k)
         }
     }
 
     private fun resolveBackground(k: Key): Int {
         if (isKeyPressed) return bgPressed
         return when {
-            k is Key.Emoji -> bgNormal
+            k is Key.Emoji         -> bgNormal
+            k is Key.CategoryIcon  -> bgNormal
             k is Key.Action && k.type == ActionType.SPACE -> bgSpace
             k is Key.Action -> bgAction
             else -> bgNormal
@@ -144,6 +148,16 @@ class KeyView @JvmOverloads constructor(
         val cx = width / 2f
         val cy = height / 2f - (mainPaint.descent() + mainPaint.ascent()) / 2f
         canvas.drawText(k.char.toString(), cx, cy, mainPaint)
+    }
+
+    // ── Category icon key (Unicode, no emoji) ────────────────────────────────
+
+    private fun drawCategoryIcon(canvas: Canvas, category: EmojiCategory) {
+        mainPaint.textSize = sp(16f)
+        mainPaint.color = colorHint   // grey, like inactive tab icons
+        val cx = width / 2f
+        val cy = height / 2f - (mainPaint.descent() + mainPaint.ascent()) / 2f
+        canvas.drawText(category.symbol, cx, cy, mainPaint)
     }
 
     // ── Emoji key ────────────────────────────────────────────────────────────
@@ -244,10 +258,11 @@ class KeyView @JvmOverloads constructor(
     }
 
     private fun mainLabel(key: Key?): String? = when (key) {
-        is Key.Letter -> key.char.uppercaseChar().toString()
-        is Key.Symbol -> key.char.toString()
-        is Key.Emoji  -> key.emoji
-        is Key.Action -> actionLabel(key.type)
+        is Key.Letter       -> key.char.uppercaseChar().toString()
+        is Key.Symbol       -> key.char.toString()
+        is Key.Emoji        -> key.emoji
+        is Key.CategoryIcon -> key.category.symbol
+        is Key.Action       -> actionLabel(key.type)
         null -> null
     }
 
@@ -264,6 +279,7 @@ class KeyView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 setPressed(true)
                 when {
+                    k is Key.CategoryIcon -> { /* category switching — no-op for now */ }
                     k is Key.Action && k.type == ActionType.BACKSPACE -> controller?.onBackspaceDown()
                     k is Key.Action && k.type == ActionType.SHIFT     -> controller?.onShiftTapped()
                     else -> controller?.onKeyTapped(k)
