@@ -5,13 +5,16 @@ package com.example.customkeyboard.model
  */
 sealed class Key {
     /** A letter key that produces a character subject to shift state. */
-    data class Letter(val char: Char) : Key()
+    data class Letter(val char: Char, val hint: String? = null) : Key()
 
     /** A symbol key that always produces its character verbatim. */
     data class Symbol(val char: Char) : Key()
 
     /** An action key (Shift, Backspace, Space, Enter, layer switch, etc.). */
     data class Action(val type: ActionType) : Key()
+
+    /** An emoji key — stores the full emoji string directly. */
+    data class Emoji(val emoji: String) : Key()
 }
 
 /**
@@ -25,31 +28,18 @@ enum class ActionType {
     SWITCH_TO_SYMBOLS,
     SWITCH_TO_QWERTY,
     SWITCH_TO_EMOJI,
-    SWITCH_FROM_EMOJI
+    SWITCH_FROM_EMOJI,
+    COMMA,      // bottom row comma key
+    PERIOD,     // bottom row period key
+    SEARCH      // bottom row search/enter key
 }
 
 /**
  * The current shift/caps-lock state of the keyboard.
- *
- * - [OFF]       — no shift active; letters are lower-case.
- * - [SINGLE]    — shift active for the next letter only; reverts to [OFF] after one commit.
- * - [CAPS_LOCK] — all letters are upper-case until explicitly toggled off.
  */
-enum class ShiftState {
-    OFF,
-    SINGLE,
-    CAPS_LOCK
-}
+enum class ShiftState { OFF, SINGLE, CAPS_LOCK }
 
 /**
  * The currently visible keyboard layer.
- *
- * - [QWERTY]  — the standard alphabetic layout.
- * - [SYMBOL]  — the numbers and punctuation layout.
- * - [EMOJI]   — the emoji picker layout.
  */
-enum class KeyboardLayer {
-    QWERTY,
-    SYMBOL,
-    EMOJI
-}
+enum class KeyboardLayer { QWERTY, SYMBOL, EMOJI }

@@ -125,6 +125,9 @@ class KeyboardController(
             is Key.Symbol -> {
                 inputActions.commitText(key.char.toString())
             }
+            is Key.Emoji -> {
+                inputActions.commitText(key.emoji)
+            }
             is Key.Action -> when (key.type) {
                 ActionType.SWITCH_TO_SYMBOLS -> {
                     viewActions.dismissKeyPreview()
@@ -148,7 +151,9 @@ class KeyboardController(
                 }
                 ActionType.SHIFT -> onShiftTapped()
                 ActionType.SPACE -> inputActions.commitText(" ")
-                ActionType.ENTER -> {
+                ActionType.COMMA -> inputActions.commitText(",")
+                ActionType.PERIOD -> inputActions.commitText(".")
+                ActionType.SEARCH, ActionType.ENTER -> {
                     val actionCode = when (currentImeOptions and 0xFF) {
                         IME_ACTION_DONE -> IME_ACTION_DONE
                         IME_ACTION_SEARCH -> IME_ACTION_SEARCH
@@ -162,13 +167,6 @@ class KeyboardController(
                 ActionType.BACKSPACE -> { /* handled via onBackspaceDown/Up */ }
             }
         }
-    }
-
-    /**
-     * Called when an emoji key is tapped. Commits the full emoji string directly.
-     */
-    fun onEmojiTapped(emoji: String) {
-        inputActions.commitText(emoji)
     }
 
     // -------------------------------------------------------------------------
