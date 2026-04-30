@@ -37,5 +37,7 @@ class CustomIMEService : InputMethodService() {
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         controller.onStartInput(info.imeOptions)
+        // Re-measure in case the user changed the height setting while the keyboard was hidden
+        keyboardView?.requestLayout()
     }
 }

@@ -49,7 +49,7 @@ class KeyboardView @JvmOverloads constructor(
     private val dismissPreviewRunnable = Runnable { dismissKeyPreview() }
 
     // ── Dimensions ───────────────────────────────────────────────────────────
-    // Base row height is 52dp, scaled by user preference
+    // Scale is read fresh on every layout pass — no caching, no stale values.
     private val heightScale: Float get() = KeyboardHeightManager.getScale(context)
     private val rowHeightPx:       Int get() = (dpToPx(52) * heightScale).toInt()
     private val emojiRowHeightPx:  Int get() = (dpToPx(72) * heightScale).toInt()
@@ -59,6 +59,9 @@ class KeyboardView @JvmOverloads constructor(
     private val keyGapPx:          Int get() = dpToPx(6)
     private val rowGapPx:          Int get() = dpToPx(4)
     private val sidePadPx:         Int get() = dpToPx(4)
+
+    // Track last-applied scale so we can detect changes and re-measure
+    private var appliedScale: Float = 1.0f
 
     init {
         setBackgroundColor(Color.parseColor("#1C1C1E"))
@@ -198,6 +201,17 @@ class KeyboardView @JvmOverloads constructor(
     // ── Measure ──────────────────────────────────────────────────────────────
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        // If the user changed the height setting since last layout, re-inflate
+        // so the emoji grid rows (which use LinearLayout.LayoutParams) also update.
+        val currentScale = heightScale
+        if (currentScale != appliedScale) {
+            appliedScale = currentScale
+            // Re-inflate emoji grid rows with new heights (QWERTY/Symbol rows are
+            // laid out directly in onLayout so they pick up the new value automatically)
+            if (currentLayer == KeyboardLayer.EMOJI) {
+                populateEmojiGrid(currentEmojiCategory)
+            }
+        }
         val w = MeasureSpec.getSize(widthMeasureSpec)
         val h = computeTotalHeight()
         setMeasuredDimension(w, h)
