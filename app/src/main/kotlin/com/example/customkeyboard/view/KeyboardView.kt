@@ -214,18 +214,24 @@ class KeyboardView @JvmOverloads constructor(
      * committing text to the input connection.
      */
     private fun setGifSearchInterceptor(active: Boolean) {
-        val interceptor: ((Key) -> Boolean)? = if (active) { key ->
-            val panel = gifPanelView ?: return@if false
-            when {
-                key is Key.Letter -> { panel.appendSearchChar(key.char); true }
-                key is Key.Symbol -> { panel.appendSearchChar(key.char); true }
-                key is Key.Action && key.type == ActionType.BACKSPACE -> {
-                    panel.deleteSearchChar(); true
+        val interceptor: ((Key) -> Boolean)? = if (active) {
+            { key ->
+                val panel = gifPanelView
+                if (panel == null) {
+                    false
+                } else {
+                    when {
+                        key is Key.Letter -> { panel.appendSearchChar(key.char); true }
+                        key is Key.Symbol -> { panel.appendSearchChar(key.char); true }
+                        key is Key.Action && key.type == ActionType.BACKSPACE -> {
+                            panel.deleteSearchChar(); true
+                        }
+                        key is Key.Action && key.type == ActionType.SPACE -> {
+                            panel.appendSearchChar(' '); true
+                        }
+                        else -> false
+                    }
                 }
-                key is Key.Action && key.type == ActionType.SPACE -> {
-                    panel.appendSearchChar(' '); true
-                }
-                else -> false
             }
         } else null
 
